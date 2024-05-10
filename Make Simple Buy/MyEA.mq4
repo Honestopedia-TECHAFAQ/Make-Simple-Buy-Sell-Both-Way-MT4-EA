@@ -10,6 +10,7 @@ input double lotSize = 0.01; // Initial lot size
 input int takeProfit = 50; // Take profit in pips
 input int stopLoss = 0; // Stop loss in pips (0 for no stop loss)
 input double martingaleMultiplier = 2; // Martingale multiplier
+input int slippage = 3; // Maximum allowed slippage
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -51,7 +52,10 @@ void CloseOrders()
      {
       if (OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
         {
-         OrderClose(OrderTicket(), OrderLots(), MarketInfo(OrderSymbol(), MODE_BID), 0, clrNONE);
+         if (OrderClose(OrderTicket(), OrderLots(), MarketInfo(OrderSymbol(), MODE_BID), slippage, clrNONE) == false)
+           {
+            Print("Error closing order: ", GetLastError());
+           }
         }
      }
   }
@@ -65,9 +69,17 @@ void OpenOrders()
    if (buyTicket > 0)
      {
       // Set take profit and stop loss
-      OrderModify(buyTicket, buyPrice + takeProfit * Point, 0, 0, 0);
-      if(stopLoss > 0)
-          OrderModify(buyTicket, 0, buyPrice - stopLoss * Point, 0, 0);
+      if (OrderModify(buyTicket, buyPrice + takeProfit * Point, 0, 0, 0) == false)
+        {
+         Print("Error modifying buy order: ", GetLastError());
+        }
+      if (stopLoss > 0)
+        {
+         if (OrderModify(buyTicket, 0, buyPrice - stopLoss * Point, 0, 0) == false)
+           {
+            Print("Error modifying buy order stop loss: ", GetLastError());
+           }
+        }
      }
 
    // Open sell order
@@ -76,8 +88,16 @@ void OpenOrders()
    if (sellTicket > 0)
      {
       // Set take profit and stop loss
-      OrderModify(sellTicket, sellPrice - takeProfit * Point, 0, 0, 0);
-      if(stopLoss > 0)
-          OrderModify(sellTicket, 0, sellPrice + stopLoss * Point, 0, 0);
+      if (OrderModify(sellTicket, sellPrice - takeProfit * Point, 0, 0, 0) == false)
+        {
+         Print("Error modifying sell order: ", GetLastError());
+        }
+      if (stopLoss > 0)
+        {
+         if (OrderModify(sellTicket, 0, sellPrice + stopLoss * Point, 0, 0) == false)
+           {
+            Print("Error modifying sell order stop loss: ", GetLastError());
+           }
+        }
      }
   }
