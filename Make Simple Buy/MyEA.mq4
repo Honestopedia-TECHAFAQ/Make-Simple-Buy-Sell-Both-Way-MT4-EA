@@ -1,7 +1,7 @@
 //+------------------------------------------------------------------+
-//|                                                     MyEA.mq4     |
-//|                        Copyright 2024, MetaQuotes Software Corp. |
-//|                                       http://www.metaquotes.net/ |
+//|                                                bothway_buysell.mq4|
+//|                      Copyright 2024, MetaQuotes Software Corp.  |
+//|                                              http://www.metaquotes.net/|
 //+------------------------------------------------------------------+
 #property strict
 
@@ -65,7 +65,7 @@ void OpenOrders()
   {
    // Open buy order
    double buyPrice = Ask;
-   int buyTicket = OrderSend(OrderType(), lotSize, buyPrice, slippage, 0, 0, 0, "Buy Order", 0, 0, clrNONE);
+   int buyTicket = OrderSend(OP_BUY, lotSize, buyPrice, slippage, 0, 0, 0, "Buy Order", 0, 0, clrNONE);
    if (buyTicket > 0)
      {
       // Set take profit and stop loss
