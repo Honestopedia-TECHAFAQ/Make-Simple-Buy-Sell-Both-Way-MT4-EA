@@ -1,103 +1,109 @@
 //+------------------------------------------------------------------+
-//|                                                bothway_buysell.mq4|
-//|                      Copyright 2024, MetaQuotes Software Corp.  |
-//|                                              http://www.metaquotes.net/|
+//|                                                  SimpleMartingale|
+//|                    Copyright 2024, MetaQuotes Software Corp.     |
+//|                                       http://www.metaquotes.net/ |
 //+------------------------------------------------------------------+
 #property strict
 
 // Input parameters
-input double lotSize = 0.01; // Initial lot size
-input int takeProfit = 50; // Take profit in pips
-input int stopLoss = 0; // Stop loss in pips (0 for no stop loss)
-input double martingaleMultiplier = 2; // Martingale multiplier
-input int slippage = 3; // Maximum allowed slippage
+input double LotSize = 0.01;          // Initial lot size
+input double TP = 50;                 // Take Profit in pips
+input double Multiplier = 2;          // Martingale multiplier
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
   {
-   // Initialization code goes here
    return(INIT_SUCCEEDED);
   }
-
 //+------------------------------------------------------------------+
 //| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
-   // Deinitialization code goes here
+  
   }
-
 //+------------------------------------------------------------------+
 //| Expert tick function                                             |
 //+------------------------------------------------------------------+
 void OnTick()
   {
-   // Check if a new candle has formed
+   static bool buyOrderOpened = false;
+   static bool sellOrderOpened = false;
+   static double initialPrice = 0;
+   double lotSizeToUse = LotSize;
+   
+   // Check if new candle formed
    if (Time[0] != Time[1])
-     {
-      // Close any existing orders
-      CloseOrders();
-
-      // Open new orders
-      OpenOrders();
-     }
+   {
+      // Close any open orders
+      CloseOpenOrders();
+      
+      // Reset flags
+      buyOrderOpened = false;
+      sellOrderOpened = false;
+      
+      // Reset initial price
+      initialPrice = 0;
+   }
+   
+   // Check if initial price is not set
+   if (initialPrice == 0)
+      initialPrice = Ask;
+   
+   // Check if no buy order opened and no sell order opened
+   if (!buyOrderOpened && !sellOrderOpened)
+   {
+      // Open buy order
+      if (OrderSend(Symbol(), OP_BUY, lotSizeToUse, Ask, 3, 0, 0, "", 0, 0, clrGreen))
+         buyOrderOpened = true;
+   }
+   // Check if buy order opened and take profit reached
+   else if (buyOrderOpened && (Ask - initialPrice) >= TP * Point)
+   {
+      // Close buy order
+      if (OrderSelect(0, SELECT_BY_POS) && OrderType() == OP_BUY)
+         OrderClose(OrderTicket(), OrderLots(), Bid, 3, clrRed);
+      
+      // Open sell order with martingale
+      if (OrderSend(Symbol(), OP_SELL, lotSizeToUse, Bid, 3, 0, 0, "", 0, 0, clrRed))
+         sellOrderOpened = true;
+   }
+   // Check if no sell order opened and no buy order opened
+   else if (!sellOrderOpened && !buyOrderOpened)
+   {
+      // Open sell order
+      if (OrderSend(Symbol(), OP_SELL, lotSizeToUse, Bid, 3, 0, 0, "", 0, 0, clrRed))
+         sellOrderOpened = true;
+   }
+   // Check if sell order opened and take profit reached
+   else if (sellOrderOpened && (initialPrice - Bid) >= TP * Point)
+   {
+      // Close sell order
+      if (OrderSelect(0, SELECT_BY_POS) && OrderType() == OP_SELL)
+         OrderClose(OrderTicket(), OrderLots(), Ask, 3, clrGreen);
+      
+      // Open buy order with martingale
+      if (OrderSend(Symbol(), OP_BUY, lotSizeToUse * Multiplier, Ask, 3, 0, 0, "", 0, 0, clrGreen))
+         buyOrderOpened = true;
+   }
   }
 
-// Function to close all open orders
-void CloseOrders()
-  {
+//+------------------------------------------------------------------+
+//| Close all open orders                                            |
+//+------------------------------------------------------------------+
+void CloseOpenOrders()
+{
    for (int i = OrdersTotal() - 1; i >= 0; i--)
-     {
-      if (OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
-        {
-         if (OrderClose(OrderTicket(), OrderLots(), MarketInfo(OrderSymbol(), MODE_BID), slippage, clrNONE) == false)
-           {
-            Print("Error closing order: ", GetLastError());
-           }
-        }
-     }
-  }
-
-// Function to open new orders
-void OpenOrders()
-  {
-   // Open buy order
-   double buyPrice = Ask;
-   int buyTicket = OrderSend(OP_BUY, lotSize, buyPrice, slippage, 0, 0, 0, "Buy Order", 0, 0, clrNONE);
-   if (buyTicket > 0)
-     {
-      // Set take profit and stop loss
-      if (OrderModify(buyTicket, buyPrice + takeProfit * Point, 0, 0, 0) == false)
-        {
-         Print("Error modifying buy order: ", GetLastError());
-        }
-      if (stopLoss > 0)
-        {
-         if (OrderModify(buyTicket, 0, buyPrice - stopLoss * Point, 0, 0) == false)
-           {
-            Print("Error modifying buy order stop loss: ", GetLastError());
-           }
-        }
-     }
-
-   // Open sell order
-   double sellPrice = Bid;
-   int sellTicket = OrderSend(OP_SELL, lotSize, sellPrice, slippage, 0, 0, 0, "Sell Order", 0, 0, clrNONE);
-   if (sellTicket > 0)
-     {
-      // Set take profit and stop loss
-      if (OrderModify(sellTicket, sellPrice - takeProfit * Point, 0, 0, 0) == false)
-        {
-         Print("Error modifying sell order: ", GetLastError());
-        }
-      if (stopLoss > 0)
-        {
-         if (OrderModify(sellTicket, 0, sellPrice + stopLoss * Point, 0, 0) == false)
-           {
-            Print("Error modifying sell order stop loss: ", GetLastError());
-           }
-        }
-     }
-  }
+   {
+      if (OrderSelect(i, SELECT_BY_POS) && OrderSymbol() == Symbol())
+      {
+         if (OrderType() <= OP_SELL)
+            OrderClose(OrderTicket(), OrderLots(), Bid, 3, clrRed);
+         else
+            OrderClose(OrderTicket(), OrderLots(), Ask, 3, clrGreen);
+      }
+   }
+}
+//+------------------------------------------------------------------+
